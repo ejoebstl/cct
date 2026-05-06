@@ -18,8 +18,9 @@
 # one or killing one doesn't affect the others. New claude sessions are
 # auto-renamed via /rename so they show up readably in --resume pickers.
 #
-# New worktrees automatically symlink .envrc and python_env/ from the main
-# repo if they exist, so direnv and the shared venv work without copying.
+# New worktrees automatically symlink .envrc, python_env/, and virtual_env/
+# from the main repo if they exist, so direnv and the shared venv work
+# without copying.
 
 set -euo pipefail
 
@@ -43,7 +44,7 @@ link_shared() {
   # Symlink .envrc and python_env/ from the main repo into $wt_path,
   # if they exist in the main repo and aren't already present in the worktree.
   local item link target
-  for item in .envrc python_env; do
+  for item in .envrc python_env virtual_env; do
     target="$repo_root/$item"
     link="$wt_path/$item"
     [[ ! -e "$target" ]] && continue
@@ -60,9 +61,13 @@ link_shared() {
   done
 
   if [[ -L "$wt_path/.envrc" ]] && command -v direnv >/dev/null 2>&1; then
-    ( cd "$wt_path" && direnv allow ) >/dev/null 2>&1 \
-      && echo "  · direnv allowed" \
-      || echo "  · direnv allow failed (run manually if needed)"
+    if ( cd "$wt_path" && direnv status 2>/dev/null ) | grep -qE 'Found RC allowed (true|1)$'; then
+      echo "  · .envrc already allowed"
+    else
+      ( cd "$wt_path" && direnv allow ) >/dev/null 2>&1 \
+        && echo "  · direnv allowed" \
+        || echo "  · direnv allow failed (run manually if needed)"
+    fi
   fi
 }
 
@@ -71,6 +76,11 @@ start_or_attach_session() {
   local win="$1" cwd="$2" cmd="$3"
 
   if ! tmux has-session -t "$session" 2>/dev/null; then
+    # Source .envrc into claude's env via direnv exec. tmux -c sets cwd, so '.' resolves there.
+    if [[ -e "$cwd/.envrc" ]] && command -v direnv >/dev/null 2>&1; then
+      cmd="direnv exec . $cmd"
+    fi
+
     if [[ "$use_backup_key" == "1" ]]; then
       tmux new-session -d -s "$session" -c "$cwd" \
         -e "ANTHROPIC_API_KEY=$BACKUP_ANTHROPIC_KEY" -n "$win" "$cmd"
@@ -143,7 +153,7 @@ cmd_rm() {
   fi
 
   # git worktree remove will rm -rf the directory, including symlinks.
-  # The symlink targets (~/.../.envrc and python_env in the main repo) are NOT touched.
+  # The symlink targets (.envrc, python_env, virtual_env in the main repo) are NOT touched.
   git -C "$repo_root" worktree remove "$wt_path"
   echo "→ Removed $wt_path  (branch preserved; delete with 'git branch -d feat/$name')"
 }
