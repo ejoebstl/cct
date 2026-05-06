@@ -61,12 +61,15 @@ link_shared() {
   done
 
   if [[ -L "$wt_path/.envrc" ]] && command -v direnv >/dev/null 2>&1; then
-    if ( cd "$wt_path" && direnv status 2>/dev/null ) | grep -qE 'Found RC allowed (true|1)$'; then
+    # direnv status: "Found RC allowed N" where 0=Allowed, 1=NotAllowed, 2=Denied.
+    if ( cd "$wt_path" && direnv status 2>/dev/null ) | grep -qE 'Found RC allowed 0$'; then
       echo "  · .envrc already allowed"
     else
-      ( cd "$wt_path" && direnv allow ) >/dev/null 2>&1 \
-        && echo "  · direnv allowed" \
-        || echo "  · direnv allow failed (run manually if needed)"
+      if ( cd "$wt_path" && direnv allow ) >/dev/null 2>&1; then
+        echo "  · direnv allowed"
+      else
+        echo "  · direnv allow failed (run manually if needed)" >&2
+      fi
     fi
   fi
 }
