@@ -62,6 +62,10 @@ complete -c cct -n __cct_needs_command -a ls     -d 'List worktrees and sessions
 # Backup-key flag (allowed at any position).
 complete -c cct -s k -l backup-key -d 'Use $BACKUP_ANTHROPIC_KEY for claude'
 
+# Force-remove flag (only valid for `cct rm`).
+complete -c cct -n '__fish_seen_subcommand_from rm' -s f -l force \
+    -d 'Force remove worktree (allow uncommitted changes)'
+
 # Per-subcommand positional completions.
 complete -c cct -n '__cct_using_at check 1'  -a '(__cct_branches)'       -d branch
 complete -c cct -n '__cct_using_at resume 1' -a '(__cct_worktree_names)' -d worktree

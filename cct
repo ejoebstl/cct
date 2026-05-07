@@ -5,7 +5,9 @@
 #   cct new <name> [base]        Create new worktree on new branch off base (default: development)
 #   cct check <branch>           Worktree on existing branch (local or remote)
 #   cct resume <name>            Open existing worktree, resume last claude session
-#   cct rm <name>                Remove worktree (keeps branch) and kill its tmux session
+#   cct rm [-f|--force] <name>   Remove worktree (keeps branch) and kill its tmux session.
+#                                --force passes through to git worktree remove, allowing
+#                                removal even with uncommitted changes.
 #   cct ls                       List worktrees and tmux sessions for this repo
 #
 # Flags:
@@ -146,7 +148,18 @@ cmd_resume() {
 }
 
 cmd_rm() {
-  local name="${1:?usage: cct rm <name>}"
+  local force=0
+  local rest=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--force) force=1 ;;
+      *) rest+=("$1") ;;
+    esac
+    shift
+  done
+  set -- "${rest[@]+"${rest[@]}"}"
+
+  local name="${1:?usage: cct rm [-f|--force] <name>}"
   paths_for "$name"
   [[ -d "$wt_path" ]] || die "no worktree at $wt_path"
 
@@ -157,7 +170,10 @@ cmd_rm() {
 
   # git worktree remove will rm -rf the directory, including symlinks.
   # The symlink targets (.envrc, python_env, virtual_env in the main repo) are NOT touched.
-  git -C "$repo_root" worktree remove "$wt_path"
+  local remove_args=(worktree remove)
+  [[ "$force" == "1" ]] && remove_args+=(--force)
+  remove_args+=("$wt_path")
+  git -C "$repo_root" "${remove_args[@]}"
   echo "→ Removed $wt_path  (branch preserved; delete with 'git branch -d feat/$name')"
 }
 
@@ -210,7 +226,7 @@ case "${1:-}" in
   rm)     shift; cmd_rm     "$@" ;;
   ls)     cmd_ls ;;
   ""|-h|--help)
-    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *) die "unknown command: $1  (try: cct --help)" ;;
 esac
